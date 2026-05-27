@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mailroom Kiosk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ===== HP design tokens (per spec §10) ===== */
+  :root {
+    /* surface */
+    --canvas: #FFFFFF;
+    --cloud: #F7F7F7;
+    --fog: #EFEFEF;
+    --hairline: #E8E8E8;
+    --steel: #C2C2C2;
+
+    /* text */
+    --ink: #1A1A1A;
+    --charcoal: #3D3D3D;
+    --graphite: #636363;
+    --on-ink: #FFFFFF;
+
+    /* find = HP Electric Blue */
+    --find: #024AD8;
+    --find-bright: #296EF9;
+    --find-deep: #0E3191;
+    --find-soft: #E6EEFD;
+
+    /* store = postal red (bloom coral) */
+    --store: #FF5050;
+    --store-deep: #B3262B;
+    --store-soft: #FDE5E3;
+    --on-store: #FFFFFF;
+
+    /* zones — 빨/노/초/파 (color + name per spec §1) */
+    --zone-a: #DC2626;   /* red */
+    --zone-b: #EAB308;   /* yellow */
+    --zone-c: #16A34A;   /* green */
+    --zone-d: #2563EB;   /* blue */
+    --zone-a-soft: #FBE3E4;
+    --zone-b-soft: #FEF3C7;
+    --zone-c-soft: #DCFCE7;
+    --zone-d-soft: #DBEAFE;
+
+    /* radii (HP two-tier per spec §10.4) */
+    --r-btn: 4px;
+    --r-card: 16px;
+    --r-badge: 8px;
+
+    /* depth */
+    --lift: 0 2px 8px rgba(26, 26, 26, 0.08);
+    --lift-strong: 0 8px 24px rgba(26, 26, 26, 0.12);
+
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    font-family: var(--font);
+    color: var(--ink);
+    background: #FFFFFF;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  /* ===== Kiosk frame (9:16) ===== */
+  .kiosk {
+    width: min(440px, 100%);
+    height: min(880px, calc(100vh - 48px));
+    background: var(--canvas);
+    border-radius: 28px;
+    box-shadow: var(--lift-strong);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* ===== Header ===== */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 8px;
+    min-height: 56px;
+  }
+  .header .title {
+    flex: 1;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--graphite);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ===== Step dots ===== */
+  .step-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .step-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--hairline);
+    display: inline-block;
+  }
+  .step-dots.store .step-dot.done { background: var(--store); }
+  .step-dots.find .step-dot.done { background: var(--find); }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    border-radius: var(--r-btn);
+    font-size: 22px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--cloud); }
+  .spacer { width: 36px; }
+
+  /* ===== Screen ===== */
+  .screen {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    padding: 4px 20px 20px;
+    overflow: hidden;
+  }
+  .screen.active { display: flex; }
+
+  .body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .footer {
+    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ===== Type ===== */
+  .display {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--ink);
+    letter-spacing: -0.4px;
+  }
+  .display-lg {
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1.05;
+    color: var(--ink);
+    letter-spacing: -0.6px;
+  }
+  .h2 {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--ink);
+    letter-spacing: -0.2px;
+  }
+  .body-text {
+    font-size: 15px;
+    color: var(--graphite);
+    line-height: 1.5;
+  }
+  .caption {
+    font-size: 12px;
+    color: var(--graphite);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* ===== Hero card (reference pattern: soft-bg container holding headline) ===== */
+  .hero {
+    background: var(--cloud);
+    border-radius: var(--r-card);
+    padding: 28px 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  /* HP chevron signature (spec §10.5) — ENTRY hero only */
+  .hero.entry:before,
+  .hero.entry:after {
+    content: '';
+    position: absolute;
+    top: -10px; bottom: -10px;
+    width: 14px;
+    background: var(--find);
+    transform: skewX(-22deg);
+  }
+  .hero.entry:before { right: 60px; }
+  .hero.entry:after { right: 30px; opacity: 0.55; }
+
+  .building-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-badge);
+    font-size: 12px;
+    color: var(--charcoal);
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+  .building-tag .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--find);
+  }
+
+  /* ===== Buttons (HP: 4px radius, UPPERCASE + letter-spacing) ===== */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 64px;
+    border: 0;
+    border-radius: var(--r-btn);
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background .12s ease, transform .08s ease;
+  }
+  .btn:active { transform: scale(0.99); }
+  .btn:disabled { background: var(--steel); color: #fff; cursor: not-allowed; box-shadow: none; }
+  .btn:disabled:hover { background: var(--steel); filter: none; }
+  .btn .sub {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    text-transform: none;
+    opacity: 0.85;
+  }
+  .btn-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    line-height: 1.1;
+  }
+
+  .btn-store { background: var(--store); color: var(--on-store); }
+  .btn-store:hover { background: var(--store-deep); }
+  .btn-find { background: var(--find); color: #fff; }
+  .btn-find:hover { background: var(--find-deep); }
+  .btn-ink { background: var(--ink); color: #fff; }
+  .btn-ink:hover { background: #000; }
+  .btn-outline {
+    background: var(--canvas);
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+  }
+  .btn-outline:hover { background: var(--cloud); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--charcoal);
+    border: 1px solid var(--hairline);
+  }
+  .btn-ghost:hover { background: var(--cloud); }
+
+  .btn-row { display: flex; gap: 10px; }
+  .btn-row .btn { flex: 1; }
+  .btn-stack { display: flex; flex-direction: column; gap: 10px; }
+
+  /* ===== Entry location header ===== */
+  .entry-loc {
+    text-align: center;
+    padding: 8px 4px 56px;
+  }
+  .loc-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.3px;
+  }
+  .loc-icon {
+    width: 24px; height: 24px;
+    stroke: var(--find);
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+  .loc-sub {
+    font-size: 16px;
+    color: var(--graphite);
+    margin-top: 6px;
+    letter-spacing: 0.2px;
+  }
+
+  /* ===== Mode tiles (50/50 split — large left/right selection) ===== */
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+  }
+  .mode-tile {
+    border: 0;
+    border-radius: var(--r-card);
+    padding: 24px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: center;
+    box-shadow: var(--lift);
+    color: #fff;
+    transition: transform .08s ease, box-shadow .15s ease, filter .15s ease;
+  }
+  .mode-tile:hover { box-shadow: var(--lift-strong); filter: brightness(1.04); }
+  .mode-tile:active { transform: scale(0.99); }
+  .mode-tile.store { background: var(--store); color: var(--on-store); }
+  .mode-tile.find { background: var(--find); color: #fff; }
+
+  .mode-tile .tile-icon {
+    width: 96px; height: 96px;
+    border-radius: 24px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mode-tile .tile-icon { background: rgba(255, 255, 255, 0.18); }
+  .mode-tile .tile-icon svg {
+    width: 52px; height: 52px;
+    stroke: currentColor; fill: none;
+    stroke-width: 1.6;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .mode-tile .tile-label {
+    font-size: 22px; font-weight: 700;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    line-height: 1.15;
+  }
+  .mode-tile .tile-role {
+    font-size: 12px; font-weight: 500;
+    opacity: 0.88; letter-spacing: 0.4px;
+    margin-top: 4px;
+  }
+  .mode-tile .tile-arrow {
+    margin-bottom: 4px;
+    font-size: 20px; font-weight: 500;
+    opacity: 0.9;
+  }
+
+  /* ===== Zone grid (A1) ===== */
+  .zone-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .zone-card {
+    background: var(--canvas);
+    border: 1.5px solid var(--hairline);
+    border-radius: var(--r-card);
+    padding: 18px 16px 16px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: border-color .15s ease, transform .08s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 130px;
+  }
+  .zone-card:hover { border-color: var(--ink); }
+  .zone-card:active { transform: scale(0.99); }
+  .zone-stripe {
+    height: 8px;
+    border-radius: 4px;
+  }
+  .zone-card .zone-name {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.2px;
+    color: var(--ink);
+  }
+  .zone-card .zone-count {
+    font-size: 13px; color: var(--graphite); font-weight: 500;
+  }
+  .zone-card.a .zone-stripe { background: var(--zone-a); }
+  .zone-card.b .zone-stripe { background: var(--zone-b); }
+  .zone-card.c .zone-stripe { background: var(--zone-c); }
+  .zone-card.d .zone-stripe { background: var(--zone-d); }
+
+  /* ===== Zone chip (A2 header) ===== */
+  .zone-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: var(--r-badge);
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .zone-chip .sw {
+    width: 12px; height: 12px; border-radius: 3px;
+  }
+  .zone-chip.b .sw { background: var(--zone-b); }
+  .zone-chip.a .sw { background: var(--zone-a); }
+  .zone-chip.c .sw { background: var(--zone-c); }
+  .zone-chip.d .sw { background: var(--zone-d); }
+
+  /* ===== Scanner viewport (A2) — reference card-slot pattern ===== */
+  .scanner {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--r-card);
+    background: #0E0E14;
+    overflow: hidden;
+    margin-top: 14px;
+  }
+  .scanner .grid-bg {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 100% 20px,
+      linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 20px 100%;
+  }
+  .scanner .reticle {
+    position: absolute;
+    inset: 14% 18%;
+    border: 2px solid #fff;
+    border-radius: 4px;
+  }
+  .scanner .reticle:before, .scanner .reticle:after,
+  .scanner .corner1, .scanner .corner2 {
+    content: ''; position: absolute;
+    width: 24px; height: 24px;
+    border: 3px solid var(--find-bright);
+  }
+  .scanner .reticle:before { top: -3px; left: -3px; border-right: 0; border-bottom: 0; }
+  .scanner .reticle:after { top: -3px; right: -3px; border-left: 0; border-bottom: 0; }
+  .scanner .corner1 { bottom: -3px; left: -3px; border-right: 0; border-top: 0; }
+  .scanner .corner2 { bottom: -3px; right: -3px; border-left: 0; border-top: 0; }
+  .scanner .scan-line {
+    position: absolute;
+    left: 18%; right: 18%;
+    top: 50%;
+    height: 2px;
+    background: var(--find-bright);
+    box-shadow: 0 0 12px var(--find-bright);
+    opacity: 0.9;
+  }
+  .scanner .hint {
+    position: absolute;
+    bottom: 12px; left: 0; right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ===== Scanned list ===== */
+  .scanned-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+  }
+  .scanned-count {
+    font-size: 13px; font-weight: 600; color: var(--ink); letter-spacing: 0.3px;
+  }
+  .scanned-list {
+    margin-top: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .scanned-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px;
+    background: var(--cloud);
+    border-radius: var(--r-badge);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-family: inherit;
+    width: 100%;
+    text-align: left;
+    transition: border-color .12s ease, background .12s ease;
+  }
+  .scanned-item:hover { border-color: var(--store); background: var(--store-soft); }
+  .scanned-item .check { color: var(--zone-c); font-size: 14px; font-weight: 700; }
+
+  /* ===== Countdown ring (A3 auto-return) ===== */
+  .countdown-ring {
+    position: relative;
+    width: 64px; height: 64px;
+    margin: 18px auto 6px;
+  }
+  .countdown-ring svg {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+  .countdown-track {
+    fill: none;
+    stroke: var(--hairline);
+    stroke-width: 4;
+  }
+  .countdown-progress {
+    fill: none;
+    stroke: var(--store);
+    stroke-width: 4;
+    stroke-linecap: round;
+  }
+  .countdown-ring.find .countdown-progress { stroke: var(--find); }
+  .countdown-ring.small { width: 40px; height: 40px; margin: 0; }
+  .countdown-ring.small .countdown-num { font-size: 14px; }
+  .countdown-ring.small .countdown-progress,
+  .countdown-ring.small .countdown-track { stroke-width: 5; }
+  .countdown-inline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .countdown-inline .label {
+    font-size: 13px;
+    color: var(--graphite);
+    font-weight: 500;
+  }
+  .countdown-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* ===== Done illustration (A3) — reference status pattern ===== */
+  .status-block {
+    margin: 20px auto 12px;
+    width: 120px; height: 120px;
+    border-radius: var(--r-card);
+    background: var(--find);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    font-size: 64px;
+    line-height: 1;
+  }
+  .status-block.store { background: var(--store); color: var(--on-store); }
+  .status-block.ink { background: var(--ink); }
+
+  /* ===== Phone/Address display (B1) ===== */
+  .addr-display {
+    background: var(--cloud);
+    border-radius: var(--r-card);
+    padding: 32px 18px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 14px 0 12px;
+    min-height: 104px;
+  }
+  .addr-field {
+    flex: 1;
+    text-align: center;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--ink);
+    padding: 8px 0;
+    border-bottom: 2px solid var(--steel);
+    position: relative;
+  }
+  .addr-field.active { border-bottom-color: var(--find); }
+  .addr-field .ph { color: var(--steel); font-weight: 500; }
+  .addr-field .lbl {
+    position: absolute;
+    top: -20px; left: 0; right: 0;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--graphite);
+  }
+  .addr-display .sep {
+    font-size: 24px;
+    color: var(--steel);
+    font-weight: 700;
+    padding-top: 8px;
+  }
+
+  /* ===== Keypad ===== */
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .key {
+    height: 58px;
+    border: 0;
+    border-radius: var(--r-btn);
+    background: var(--cloud);
+    color: var(--ink);
+    font-size: 22px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background .15s ease, transform .08s ease;
+  }
+  .key:hover { background: var(--fog); }
+  .key:active { transform: scale(0.97); }
+  .key.confirm { background: var(--find); color: #fff; letter-spacing: 0.6px; text-transform: uppercase; font-size: 14px; font-weight: 700; }
+  .key.confirm:hover { background: var(--find-deep); }
+  .key.confirm:disabled { background: var(--steel); cursor: not-allowed; }
+  .key.util {
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    color: var(--charcoal);
+    font-size: 18px;
+  }
+
+  /* ===== Zone map placeholder (B2) ===== */
+  .zone-map {
+    width: 100%;
+    aspect-ratio: 5 / 3;
+    background: var(--cloud);
+    border-radius: var(--r-card);
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    margin: 14px 0 12px;
+  }
+  .zone-map .cell {
+    border-radius: var(--r-badge);
+    padding: 12px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    background: var(--canvas);
+    border: 1.5px solid var(--hairline);
+    opacity: 0.55;
+  }
+  .zone-map .cell.active {
+    opacity: 1;
+    border-color: var(--find);
+    box-shadow: 0 0 0 3px var(--find-soft);
+  }
+  .zone-map .cell-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .zone-map .cell-bar { height: 4px; border-radius: 2px; }
+  .zone-map .cell.a .cell-bar { background: var(--zone-a); }
+  .zone-map .cell.b .cell-bar { background: var(--zone-b); }
+  .zone-map .cell.c .cell-bar { background: var(--zone-c); }
+  .zone-map .cell.d .cell-bar { background: var(--zone-d); }
+
+  /* ===== Zone result hero (B2) ===== */
+  .zone-result {
+    background: var(--find-soft);
+    border-radius: var(--r-card);
+    padding: 20px;
+    margin-top: 4px;
+  }
+  .zone-result .zone-big {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -1.2px;
+    color: var(--find-deep);
+    line-height: 1;
+  }
+  .zone-result .zone-meta {
+    margin-top: 8px;
+    font-size: 15px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* ===== Modal ===== */
+  .modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(26,26,26,0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 50;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    width: 100%;
+    background: var(--canvas);
+    border-radius: var(--r-card);
+    box-shadow: var(--lift-strong);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal .modal-title {
+    font-size: 18px; font-weight: 700; color: var(--ink);
+  }
+  .modal-close {
+    position: absolute; top: 12px; right: 16px;
+  }
+  .modal .keypad { margin-top: 4px; gap: 6px; }
+  .modal .key { height: 44px; font-size: 18px; }
+  .modal .addr-field { font-size: 26px; padding: 4px 0; }
+  .modal .addr-display { min-height: 78px; padding: 26px 12px 12px; }
+  .modal .addr-field .lbl { top: -18px; }
+  .link-btn {
+    background: none;
+    border: 0;
+    padding: 8px 0;
+    color: var(--store-deep);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    align-self: center;
+  }
+  .link-btn:hover { color: var(--store); }
+
+  /* ===== Dev: show all screens ===== */
+  body.dev .kiosk {
+    height: auto;
+    box-shadow: none;
+  }
+  body.dev .screen { display: flex; border-top: 1px dashed var(--hairline); }
+  body.dev .screen:first-of-type { border-top: 0; }
+
+  .dev-toggle {
+    position: fixed;
+    bottom: 16px; right: 16px;
+    background: var(--ink);
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    z-index: 100;
+    opacity: 0.7;
+    letter-spacing: 0.4px;
+  }
+  .dev-toggle:hover { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="kiosk" id="kiosk">
+
+  <!-- ============================================== -->
+  <!-- ENTRY — location header + mode tiles             -->
+  <!-- ============================================== -->
+  <section class="screen active" data-screen="entry">
+    <div class="header">
+      <div class="spacer"></div>
+      <div class="title"></div>
+      <div class="spacer"></div>
+    </div>
+    <div class="body">
+      <div class="entry-loc">
+        <div class="loc-name">
+          <svg class="loc-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 22s-7-8-7-13a7 7 0 0114 0c0 5-7 13-7 13z"/>
+            <circle cx="12" cy="9" r="2.5"/>
+          </svg>
+          Yonsei Apartment
+        </div>
+        <div class="loc-sub">Open 24h</div>
+      </div>
+      <div class="mode-grid">
+        <button class="mode-tile store" data-go="a1">
+          <div class="tile-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M21 8L12 3 3 8v8l9 5 9-5V8z"/>
+              <path d="M3 8l9 5 9-5"/>
+              <path d="M12 13v8"/>
+              <path d="M7.5 5.5l9 5"/>
+            </svg>
+          </div>
+          <div>
+            <div class="tile-label">Store<br>a package</div>
+            <div class="tile-role">For couriers</div>
+          </div>
+          <div class="tile-arrow">→</div>
+        </button>
+        <button class="mode-tile find" data-go="b1">
+          <div class="tile-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7"/>
+              <path d="M21 21l-4.6-4.6"/>
+              <path d="M8 11h6"/>
+              <path d="M11 8v6"/>
+            </svg>
+          </div>
+          <div>
+            <div class="tile-label">Find<br>my package</div>
+            <div class="tile-role">For residents</div>
+          </div>
+          <div class="tile-arrow">→</div>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- A1 — Select zone (Store mode)                   -->
+  <!-- ============================================== -->
+  <section class="screen" data-screen="a1">
+    <div class="header">
+      <button class="icon-btn" data-go="entry">←</button>
+      <div class="title">
+        <span class="step-dots store">
+          <span class="step-dot done"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+        </span>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <div class="body">
+      <h2 style="margin-top: 4px; font-size: 26px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.2; white-space: nowrap;">Where are you placing them?</h2>
+      <p class="body-text" style="margin-top: 8px;">Pick a floor zone. You can place anywhere within it.</p>
+      <div class="zone-grid">
+        <button class="zone-card a" data-zone="A" data-go="a2">
+          <div class="zone-stripe"></div>
+          <div class="zone-name">Zone A</div>
+          <div class="zone-count">12 items</div>
+        </button>
+        <button class="zone-card b" data-zone="B" data-go="a2">
+          <div class="zone-stripe"></div>
+          <div class="zone-name">Zone B</div>
+          <div class="zone-count">7 items</div>
+        </button>
+        <button class="zone-card c" data-zone="C" data-go="a2">
+          <div class="zone-stripe"></div>
+          <div class="zone-name">Zone C</div>
+          <div class="zone-count">3 items</div>
+        </button>
+        <button class="zone-card d" data-zone="D" data-go="a2">
+          <div class="zone-stripe"></div>
+          <div class="zone-name">Zone D</div>
+          <div class="zone-count">0 items</div>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- A2 — Scan address (continuous)                  -->
+  <!-- ============================================== -->
+  <section class="screen" data-screen="a2">
+    <div class="header">
+      <button class="icon-btn" data-go="a1">←</button>
+      <div class="title">
+        <span class="step-dots store">
+          <span class="step-dot done"></span>
+          <span class="step-dot done"></span>
+          <span class="step-dot"></span>
+        </span>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <div class="body">
+      <div style="display:flex; align-items:center; gap:8px; margin: 4px 0 8px;">
+        <span class="caption">Placing in</span>
+        <span class="zone-chip b" id="zone-chip"><span class="sw"></span> <span id="zone-chip-label">Zone B</span></span>
+      </div>
+      <h2 style="margin-top: 4px; font-size: 26px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.2; white-space: nowrap;">Scan each label's address</h2>
+
+      <div class="scanner">
+        <div class="grid-bg"></div>
+        <div class="reticle">
+          <div class="corner1"></div>
+          <div class="corner2"></div>
+        </div>
+        <div class="scan-line"></div>
+        <div class="hint">Hold the label flat under the scanner</div>
+      </div>
+
+      <div class="scanned-row">
+        <div class="scanned-count"><span id="scan-count">0</span> scanned</div>
+        <button class="btn btn-ghost" style="min-height:36px; width:auto; padding: 0 14px; font-size: 12px;" data-action="demo-scan">+ Scan</button>
+      </div>
+      <div class="scanned-list" id="scanned-list"></div>
+    </div>
+    <div class="footer">
+      <div class="btn-row">
+        <button class="btn btn-outline" data-action="add-manual">Add manually</button>
+        <button class="btn btn-store" data-go="a3">Store</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- A3 — Store done                                 -->
+  <!-- ============================================== -->
+  <section class="screen" data-screen="a3">
+    <div class="header">
+      <div class="spacer"></div>
+      <div class="title">
+        <span class="step-dots store">
+          <span class="step-dot done"></span>
+          <span class="step-dot done"></span>
+          <span class="step-dot done"></span>
+        </span>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <div class="body" style="align-items: center; text-align: center;">
+      <div class="status-block store">✓</div>
+      <h2 class="display" style="margin-top: 12px;"><span id="done-count">3</span> packages<br>registered to <span id="done-zone">Zone B</span></h2>
+      <div class="countdown-ring" aria-label="Returning to start">
+        <svg viewBox="0 0 64 64">
+          <circle class="countdown-track" cx="32" cy="32" r="28"/>
+          <circle class="countdown-progress" id="a3-countdown-ring" cx="32" cy="32" r="28"/>
+        </svg>
+        <div class="countdown-num" id="a3-countdown-num">3</div>
+      </div>
+      <p class="body-text">Returning to start</p>
+    </div>
+    <div class="footer">
+      <button class="btn btn-outline" data-go="a2">Scan more</button>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- B1 — Enter address (Find mode)                  -->
+  <!-- ============================================== -->
+  <section class="screen" data-screen="b1">
+    <div class="header">
+      <button class="icon-btn" data-go="entry">←</button>
+      <div class="title">
+        <span class="step-dots find">
+          <span class="step-dot done"></span>
+          <span class="step-dot"></span>
+          <span class="step-dot"></span>
+        </span>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <div class="body">
+      <h2 style="margin-top: 4px; font-size: 26px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.2; white-space: nowrap;">Enter your building and unit</h2>
+
+      <div class="addr-display">
+        <div class="addr-field" id="f-building">
+          <span class="lbl">Building</span>
+          <span class="ph" id="building-text">000</span>
+        </div>
+        <div class="sep">–</div>
+        <div class="addr-field active" id="f-unit">
+          <span class="lbl">Unit</span>
+          <span class="ph" id="unit-text">0000</span>
+        </div>
+      </div>
+
+      <div class="keypad" id="keypad">
+        <button class="key" data-num="1">1</button>
+        <button class="key" data-num="2">2</button>
+        <button class="key" data-num="3">3</button>
+        <button class="key" data-num="4">4</button>
+        <button class="key" data-num="5">5</button>
+        <button class="key" data-num="6">6</button>
+        <button class="key" data-num="7">7</button>
+        <button class="key" data-num="8">8</button>
+        <button class="key" data-num="9">9</button>
+        <button class="key util" data-action="back" aria-label="Backspace">⌫</button>
+        <button class="key" data-num="0">0</button>
+        <button class="key util" data-action="clear">Clear</button>
+      </div>
+    </div>
+    <div class="footer">
+      <button class="btn btn-find" data-go="b2" id="ok-btn" disabled>OK</button>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- B2 — Here's your zone                           -->
+  <!-- ============================================== -->
+  <section class="screen" data-screen="b2">
+    <div class="header">
+      <button class="icon-btn" data-go="b1">←</button>
+      <div class="title">
+        <span class="step-dots find">
+          <span class="step-dot done"></span>
+          <span class="step-dot done"></span>
+          <span class="step-dot"></span>
+        </span>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <div class="body">
+      <div class="zone-result" id="b2-result">
+        <div class="zone-big" id="b2-zone">—</div>
+        <div class="zone-meta"><span id="b2-count">0</span> packages for <strong id="result-addr">000-0000</strong></div>
+      </div>
+
+      <div class="zone-map" id="b2-map">
+        <div class="cell a" data-cell="A"><div class="cell-name">A</div><div class="cell-bar"></div></div>
+        <div class="cell b" data-cell="B"><div class="cell-name">B</div><div class="cell-bar"></div></div>
+        <div class="cell c" data-cell="C"><div class="cell-name">C</div><div class="cell-bar"></div></div>
+        <div class="cell d" data-cell="D"><div class="cell-name">D</div><div class="cell-bar"></div></div>
+      </div>
+
+      <p class="body-text" id="b2-instruction">
+        Look for unit <strong></strong> on the label in <strong></strong>.
+      </p>
+    </div>
+    <div class="footer">
+      <div class="btn-row" id="b2-actions-found">
+        <button class="btn btn-outline" data-go="b3">Print location</button>
+        <button class="btn btn-find" data-go="b3">Find</button>
+      </div>
+      <div class="btn-row" id="b2-actions-empty" style="display:none;">
+        <button class="btn btn-outline" data-go="b1">Try again</button>
+        <button class="btn btn-ink" data-go="entry">Cancel</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- B3 — Pickup complete (countdown only)           -->
+  <!-- ============================================== -->
+  <section class="screen" data-screen="b3">
+    <div class="header">
+      <div class="spacer"></div>
+      <div class="title">
+        <span class="step-dots find">
+          <span class="step-dot done"></span>
+          <span class="step-dot done"></span>
+          <span class="step-dot done"></span>
+        </span>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <div class="body" style="align-items: center; text-align: center; justify-content: center;">
+      <div class="status-block">✓</div>
+      <h2 class="display" style="margin-top: 12px;">Package<br>picked up</h2>
+      <div class="countdown-ring find" aria-label="Returning to start">
+        <svg viewBox="0 0 64 64">
+          <circle class="countdown-track" cx="32" cy="32" r="28"/>
+          <circle class="countdown-progress" id="b3-countdown-ring" cx="32" cy="32" r="28"/>
+        </svg>
+        <div class="countdown-num" id="b3-countdown-num">3</div>
+      </div>
+      <p class="body-text">Returning to start</p>
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- Modal — Add manually / Edit entry               -->
+  <!-- ============================================== -->
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal">
+      <div class="modal-title" id="modal-title">Add manually</div>
+      <p class="body-text" id="modal-sub">Enter building and unit on the label.</p>
+      <div class="addr-display" style="margin: 4px 0 8px;">
+        <div class="addr-field" id="m-building" data-action="modal-focus" data-field="building">
+          <span class="lbl">Building</span>
+          <span class="ph" id="m-building-text">000</span>
+        </div>
+        <div class="sep">–</div>
+        <div class="addr-field active" id="m-unit" data-action="modal-focus" data-field="unit">
+          <span class="lbl">Unit</span>
+          <span class="ph" id="m-unit-text">0000</span>
+        </div>
+      </div>
+      <div class="keypad">
+        <button class="key" data-mnum="1">1</button>
+        <button class="key" data-mnum="2">2</button>
+        <button class="key" data-mnum="3">3</button>
+        <button class="key" data-mnum="4">4</button>
+        <button class="key" data-mnum="5">5</button>
+        <button class="key" data-mnum="6">6</button>
+        <button class="key" data-mnum="7">7</button>
+        <button class="key" data-mnum="8">8</button>
+        <button class="key" data-mnum="9">9</button>
+        <button class="key util" data-action="modal-back">⌫</button>
+        <button class="key" data-mnum="0">0</button>
+        <button class="key util" data-action="modal-clear">Clear</button>
+      </div>
+      <button class="link-btn" id="modal-delete-link" data-action="modal-delete" style="display:none;">Delete address</button>
+      <div class="btn-row">
+        <button class="btn btn-outline" data-action="modal-close">Cancel</button>
+        <button class="btn btn-store" id="modal-save-btn" data-action="modal-save" disabled>Save</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<button class="dev-toggle" id="dev-toggle">Show all screens</button>
+
+<script>
+  // ===== Simple state machine =====
+  const screens = document.querySelectorAll('.screen');
+  let state = {
+    zone: null,
+    building: '',
+    unit: '',
+    activeField: 'building',
+    scanned: [],
+  };
+
+  function resetSession() {
+    state.zone = null;
+    state.building = '';
+    state.unit = '';
+    state.activeField = 'building';
+    state.scanned = [];
+  }
+
+  let modalState = {
+    open: false,
+    mode: 'add',     // 'add' | 'edit'
+    index: -1,       // index into state.scanned for edit
+    building: '',
+    unit: '',
+    activeField: 'building',
+  };
+
+  // ===== Persistent registry (across sessions) =====
+  // Each entry: { building, unit, zone }
+  let registry = [];
+  let lastCommit = { count: 0, zone: null };  // snapshot for A3 display
+  let lastFound = [];                          // matched entries for B2 display
+
+  function commitScanned() {
+    if (!state.zone || state.scanned.length === 0) return;
+    state.scanned.forEach(addr => {
+      const [b, u] = addr.split('-');
+      registry.push({ building: b, unit: u, zone: state.zone });
+    });
+    lastCommit = { count: state.scanned.length, zone: state.zone };
+    state.scanned = [];  // consumed — keep zone for "Scan more"
+  }
+
+  function pad4(u) { return u.length === 3 ? '0' + u : u; }
+
+  function findInRegistry(building, unit) {
+    const target = pad4(unit);
+    return registry.filter(e => e.building === building && pad4(e.unit) === target);
+  }
+
+  function removeFromRegistry(building, unit) {
+    const target = pad4(unit);
+    registry = registry.filter(e => !(e.building === building && pad4(e.unit) === target));
+  }
+
+  let prevScreen = null;
+  let countdownTimer = null;
+
+  function cancelCountdown() {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  }
+
+  function startCountdown(ringId, numId, nextScreen) {
+    if (document.body.classList.contains('dev')) return;
+    const ring = document.getElementById(ringId);
+    const numEl = document.getElementById(numId);
+    const r = parseFloat(ring.getAttribute('r'));
+    const circ = 2 * Math.PI * r;
+    ring.style.strokeDasharray = circ;
+    ring.style.transition = 'none';
+    ring.style.strokeDashoffset = '0';
+    void ring.getBoundingClientRect();
+    ring.style.transition = 'stroke-dashoffset 3s linear';
+    ring.style.strokeDashoffset = circ;
+    let count = 3;
+    numEl.textContent = count;
+    countdownTimer = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        cancelCountdown();
+        show(nextScreen);
+      } else {
+        numEl.textContent = count;
+      }
+    }, 1000);
+  }
+
+  function show(name) {
+    cancelCountdown();
+
+    // Transitions OUT of a screen
+    if (prevScreen === 'b2' && name === 'b3') {
+      // Resident confirmed pickup → de-register
+      removeFromRegistry(state.building, state.unit);
+    }
+
+    // Transitions INTO a screen
+    if (name === 'a3') {
+      commitScanned();
+    }
+    if (name === 'entry') {
+      resetSession();
+      renderAddr();
+    }
+
+    screens.forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+
+    if (name === 'b1') { renderAddr(); }
+    if (name === 'a2') { renderZoneChip(); renderScanned(); }
+    if (name === 'a3') { renderDone(); startCountdown('a3-countdown-ring', 'a3-countdown-num', 'entry'); }
+    if (name === 'b2') { renderResult(); }
+    if (name === 'b3') { startCountdown('b3-countdown-ring', 'b3-countdown-num', 'entry'); }
+
+    prevScreen = name;
+  }
+
+  function renderZoneChip() {
+    const chip = document.getElementById('zone-chip');
+    chip.className = 'zone-chip ' + state.zone.toLowerCase();
+    document.getElementById('zone-chip-label').textContent = 'Zone ' + state.zone;
+  }
+  function renderScanned() {
+    document.getElementById('scan-count').textContent = state.scanned.length;
+    const list = document.getElementById('scanned-list');
+    list.innerHTML = '';
+    // newest-first (per spec §11.1). Tap to edit/delete (spec §11.3).
+    state.scanned.slice().reverse().forEach((addr, revIdx) => {
+      const realIdx = state.scanned.length - 1 - revIdx;
+      const el = document.createElement('button');
+      el.className = 'scanned-item';
+      el.dataset.action = 'edit-scanned';
+      el.dataset.index = realIdx;
+      el.innerHTML = `<span>${addr}</span><span class="check">✓</span>`;
+      list.appendChild(el);
+    });
+  }
+
+  function openModal(mode, index) {
+    modalState.open = true;
+    modalState.mode = mode || 'add';
+    modalState.index = (typeof index === 'number') ? index : -1;
+    if (modalState.mode === 'edit') {
+      const [b, u] = (state.scanned[index] || '-').split('-');
+      modalState.building = b || '';
+      modalState.unit = u || '';
+      modalState.activeField = 'unit';
+    } else {
+      modalState.building = '';
+      modalState.unit = '';
+      modalState.activeField = 'building';
+    }
+    document.getElementById('modal-title').textContent =
+      modalState.mode === 'edit' ? 'Edit address' : 'Add manually';
+    document.getElementById('modal-sub').textContent =
+      modalState.mode === 'edit'
+        ? 'Update or remove this label.'
+        : 'Enter building and unit on the label.';
+    document.getElementById('modal-delete-link').style.display =
+      modalState.mode === 'edit' ? 'inline-block' : 'none';
+    document.getElementById('modal-backdrop').classList.add('open');
+    renderModal();
+  }
+
+  function closeModal() {
+    modalState.open = false;
+    document.getElementById('modal-backdrop').classList.remove('open');
+  }
+
+  function renderModal() {
+    const b = document.getElementById('m-building-text');
+    const u = document.getElementById('m-unit-text');
+    b.textContent = modalState.building || '000';
+    b.classList.toggle('ph', !modalState.building);
+    u.textContent = modalState.unit || '0000';
+    u.classList.toggle('ph', !modalState.unit);
+    document.getElementById('m-building').classList.toggle('active', modalState.activeField === 'building');
+    document.getElementById('m-unit').classList.toggle('active', modalState.activeField === 'unit');
+    const valid = modalState.building.length === 3 && modalState.unit.length >= 3;
+    document.getElementById('modal-save-btn').disabled = !valid;
+  }
+
+  function saveModal() {
+    if (modalState.building.length !== 3 || modalState.unit.length < 3) return;
+    const addr = `${modalState.building}-${modalState.unit}`;
+    if (modalState.mode === 'edit' && modalState.index >= 0) {
+      state.scanned[modalState.index] = addr;
+    } else {
+      state.scanned.push(addr);
+    }
+    closeModal();
+    renderScanned();
+  }
+
+  function deleteEntry() {
+    if (modalState.mode !== 'edit' || modalState.index < 0) return;
+    state.scanned.splice(modalState.index, 1);
+    closeModal();
+    renderScanned();
+  }
+  function renderDone() {
+    document.getElementById('done-count').textContent = lastCommit.count;
+    document.getElementById('done-zone').textContent = lastCommit.zone ? 'Zone ' + lastCommit.zone : '—';
+  }
+  function renderAddr() {
+    const b = document.getElementById('building-text');
+    const u = document.getElementById('unit-text');
+    b.textContent = state.building || '000';
+    b.classList.toggle('ph', !state.building);
+    u.textContent = state.unit || '0000';
+    u.classList.toggle('ph', !state.unit);
+    document.getElementById('f-building').classList.toggle('active', state.activeField === 'building');
+    document.getElementById('f-unit').classList.toggle('active', state.activeField === 'unit');
+    document.getElementById('ok-btn').disabled =
+      !(state.building.length === 3 && state.unit.length >= 3);
+  }
+  function renderResult() {
+    lastFound = findInRegistry(state.building, state.unit);
+    // Demo fallback: any address always finds 1 package in Zone D
+    if (lastFound.length === 0) {
+      lastFound = [{ building: state.building, unit: state.unit, zone: 'D', demo: true }];
+    }
+    const addr = state.building + '-' + state.unit;
+    document.getElementById('result-addr').textContent = addr;
+
+    // Distinct zones found (for demo, all packages typically in one zone)
+    const zones = [...new Set(lastFound.map(e => e.zone))];
+    const zoneBig = document.getElementById('b2-zone');
+    const countEl = document.getElementById('b2-count');
+    const instr = document.getElementById('b2-instruction');
+    const map = document.getElementById('b2-map');
+
+    map.querySelectorAll('.cell').forEach(c => c.classList.remove('active'));
+
+    if (lastFound.length === 0) {
+      zoneBig.textContent = 'Not found';
+      countEl.textContent = '0';
+      instr.innerHTML = `No packages registered for <strong>${addr}</strong>. Check your unit and try again.`;
+      document.getElementById('b2-actions-found').style.display = 'none';
+      document.getElementById('b2-actions-empty').style.display = 'flex';
+    } else {
+      const zoneLabel = zones.length === 1
+        ? 'Zone ' + zones[0]
+        : 'Zones ' + zones.join(', ');
+      zoneBig.textContent = zoneLabel;
+      countEl.textContent = lastFound.length;
+      instr.innerHTML = `Look for unit <strong>${state.unit}</strong> on the label in <strong>${zoneLabel}</strong>.`;
+      zones.forEach(z => {
+        const cell = map.querySelector(`[data-cell="${z}"]`);
+        if (cell) cell.classList.add('active');
+      });
+      document.getElementById('b2-actions-found').style.display = 'flex';
+      document.getElementById('b2-actions-empty').style.display = 'none';
+    }
+  }
+
+  // ===== Event delegation =====
+  document.addEventListener('click', (e) => {
+    const goBtn = e.target.closest('[data-go]');
+    if (goBtn) {
+      const z = goBtn.dataset.zone;
+      if (z) state.zone = z;
+      show(goBtn.dataset.go);
+      return;
+    }
+
+    // Modal numeric input
+    const mnum = e.target.closest('[data-mnum]');
+    if (mnum) {
+      const n = mnum.dataset.mnum;
+      if (modalState.activeField === 'building') {
+        if (modalState.building.length < 3) modalState.building += n;
+        if (modalState.building.length === 3) modalState.activeField = 'unit';
+      } else {
+        if (modalState.unit.length < 4) modalState.unit += n;
+      }
+      renderModal();
+      return;
+    }
+
+    // Main keypad numeric (B1)
+    const numKey = e.target.closest('[data-num]');
+    if (numKey) {
+      const n = numKey.dataset.num;
+      if (state.activeField === 'building') {
+        if (state.building.length < 3) state.building += n;
+        if (state.building.length === 3) state.activeField = 'unit';
+      } else {
+        if (state.unit.length < 4) state.unit += n;
+      }
+      renderAddr();
+      return;
+    }
+
+    const action = e.target.closest('[data-action]');
+    if (!action) return;
+    const a = action.dataset.action;
+
+    if (a === 'clear') {
+      state.building = ''; state.unit = ''; state.activeField = 'building';
+      renderAddr();
+    } else if (a === 'back') {
+      if (state.activeField === 'unit' && state.unit.length > 0) {
+        state.unit = state.unit.slice(0, -1);
+      } else if (state.building.length > 0) {
+        state.activeField = 'building';
+        state.building = state.building.slice(0, -1);
+      }
+      renderAddr();
+    } else if (a === 'demo-scan') {
+      // realistic Korean apartment numbering: <floor><unit-2digit>
+      // floor 1–9 → 3-digit (e.g., 604 = 6F unit 4); floor 10+ → 4-digit (e.g., 1320 = 13F unit 20)
+      const floor = Math.floor(Math.random() * 25) + 1;
+      const unit = Math.floor(Math.random() * 12) + 1;
+      const suffix = floor + String(unit).padStart(2, '0');
+      state.scanned.push('102-' + suffix);
+      renderScanned();
+    } else if (a === 'add-manual') {
+      openModal('add');
+    } else if (a === 'edit-scanned') {
+      openModal('edit', parseInt(action.dataset.index, 10));
+    } else if (a === 'modal-delete') {
+      deleteEntry();
+    } else if (a === 'modal-focus') {
+      modalState.activeField = action.dataset.field;
+      renderModal();
+    } else if (a === 'modal-back') {
+      if (modalState.activeField === 'unit' && modalState.unit.length > 0) {
+        modalState.unit = modalState.unit.slice(0, -1);
+      } else if (modalState.building.length > 0) {
+        modalState.activeField = 'building';
+        modalState.building = modalState.building.slice(0, -1);
+      }
+      renderModal();
+    } else if (a === 'modal-clear') {
+      modalState.building = ''; modalState.unit = ''; modalState.activeField = 'building';
+      renderModal();
+    } else if (a === 'modal-save') {
+      saveModal();
+    } else if (a === 'modal-close') {
+      closeModal();
+    }
+  });
+
+  // Close modal on backdrop click
+  document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-backdrop') {
+      e.currentTarget.classList.remove('open');
+    }
+  });
+
+  // ===== Dev toggle =====
+  const devBtn = document.getElementById('dev-toggle');
+  devBtn.addEventListener('click', () => {
+    document.body.classList.toggle('dev');
+    devBtn.textContent = document.body.classList.contains('dev')
+      ? 'Single screen'
+      : 'Show all screens';
+  });
+</script>
+
+</body>
+</html>
