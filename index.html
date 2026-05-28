@@ -1249,6 +1249,63 @@
     renderScanned();
   }
 
+  // Auto scan loop: continuously capture + OCR while on A2
+  let autoScanActive = false;
+  let lastAutoScan = { value: null, time: 0 };
+
+  function startAutoScan() {
+    if (autoScanActive) return;
+    autoScanActive = true;
+    autoScanLoop();
+  }
+
+  function stopAutoScan() {
+    autoScanActive = false;
+    lastAutoScan = { value: null, time: 0 };
+  }
+
+  async function autoScanLoop() {
+    if (!autoScanActive) return;
+    const video = document.getElementById('scanner-video');
+    if (!video || !video.videoWidth || typeof Tesseract === 'undefined') {
+      if (autoScanActive) setTimeout(autoScanLoop, 1200);
+      return;
+    }
+    if (ocrBusy) {
+      if (autoScanActive) setTimeout(autoScanLoop, 600);
+      return;
+    }
+    ocrBusy = true;
+    try {
+      const worker = await initOcr();
+      if (worker) {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const { data } = await worker.recognize(canvas);
+        const match = data.text.match(/(\d{3})\s*-\s*(\d{3,4})/);
+        if (match) {
+          const addr = `${match[1]}-${match[2]}`;
+          const now = Date.now();
+          // Dedupe: skip if same as last auto-scan within 5s
+          if (addr !== lastAutoScan.value || now - lastAutoScan.time > 5000) {
+            state.scanned.push(addr);
+            renderScanned();
+            setOcrStatus(`✓ ${addr}`);
+            setTimeout(() => setOcrStatus(''), 1200);
+            lastAutoScan = { value: addr, time: now };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Auto OCR failed', e);
+    } finally {
+      ocrBusy = false;
+    }
+    if (autoScanActive) setTimeout(autoScanLoop, 1200);
+  }
+
   async function captureAndScan() {
     if (ocrBusy) return;
     const video = document.getElementById('scanner-video');
@@ -1349,8 +1406,12 @@
     screens.forEach(s => s.classList.toggle('active', s.dataset.screen === name));
 
     if (name === 'b1') { renderAddr(); }
-    if (name === 'a2') { renderZoneChip(); renderScanned(); startCamera(); initOcr(); }
-    else { stopCamera(); }
+    if (name === 'a2') {
+      renderZoneChip(); renderScanned();
+      startCamera(); initOcr(); startAutoScan();
+    } else {
+      stopAutoScan(); stopCamera();
+    }
     if (name === 'a3') { renderDone(); startCountdown('a3-countdown-ring', 'a3-countdown-num', 'entry'); }
     if (name === 'b2') { renderResult(); }
     if (name === 'b3') { startCountdown('b3-countdown-ring', 'b3-countdown-num', 'entry'); }
